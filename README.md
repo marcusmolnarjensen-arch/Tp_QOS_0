@@ -885,6 +885,42 @@ R2#
 
 
 module 10 : grafana
+mise en place d'une solution de monitoring avec grafana et influx db pour avoir un aperçu de mes vpcs (ON et OFF) j'ai aussi l'heure a laquelle ils se sont allumés qui s'affiche
+Docker:
+<img width="1587" height="895" alt="image" src="https://github.com/user-attachments/assets/5cf46e61-b6f7-49ea-8fd8-dc112197fe39" />
+<img width="392" height="117" alt="image" src="https://github.com/user-attachments/assets/43874154-3647-4e79-9d1a-ff5ce33ae24f" />
+<img width="1437" height="512" alt="image" src="https://github.com/user-attachments/assets/f8c56465-0908-49f0-a810-a3213b2e87b7" />
+<img width="1421" height="668" alt="image" src="https://github.com/user-attachments/assets/8b67f8e6-e914-45e7-a853-7e2a1dcc992c" />
+<img width="1455" height="862" alt="image" src="https://github.com/user-attachments/assets/498238d3-b178-4dbb-a653-054ab64f2aae" />
+<img width="1007" height="250" alt="image" src="https://github.com/user-attachments/assets/7fb97f7c-e2d2-49fe-9659-5e5df295d438" />
+**WITH t AS (
+  SELECT time, vpcs_name, status,
+         LAG(status) OVER (PARTITION BY vpcs_name ORDER BY time) AS prev
+  FROM vpcs_status
+  WHERE time >= now() - INTERVAL '7 days'
+),
+latest AS (
+  SELECT vpcs_name, MAX(time) AS last_time
+  FROM vpcs_status
+  WHERE time >= now() - INTERVAL '7 days'
+  GROUP BY vpcs_name
+),
+cur AS (
+  SELECT v.vpcs_name, v.status
+  FROM vpcs_status v
+  JOIN latest l ON v.vpcs_name = l.vpcs_name AND v.time = l.last_time
+),
+up_since AS (
+  SELECT vpcs_name, MAX(time) AS since
+  FROM t
+  WHERE status = 1 AND (prev IS NULL OR prev = 0)
+  GROUP BY vpcs_name
+)
+SELECT c.vpcs_name, c.status, u.since
+FROM cur c
+LEFT JOIN up_since u ON c.vpcs_name = u.vpcs_name
+ORDER BY c.vpcs_name**
+resultat:
 OFF
 <img width="1127" height="512" alt="image" src="https://github.com/user-attachments/assets/744fda77-075e-4608-a7cd-8214b2fb6750" />  
 <img width="1350" height="525" alt="image" src="https://github.com/user-attachments/assets/359d8ff8-9c92-49f0-a525-187c267d5808" />
@@ -892,8 +928,10 @@ ON
 <img width="1037" height="502" alt="image" src="https://github.com/user-attachments/assets/06f939fd-dfc7-475c-92cb-a95c1403bf7a" />
 <img width="1368" height="546" alt="image" src="https://github.com/user-attachments/assets/613cfac4-e114-4c41-b6d8-be9405bdfece" />
 3 OFF 3 ON
+<img width="1058" height="502" alt="image" src="https://github.com/user-attachments/assets/d7c038c9-7ef0-492d-ab06-0f44dc77740a" />
 <img width="1362" height="482" alt="image" src="https://github.com/user-attachments/assets/aadd5612-ec7e-4019-9d60-798a1a76ecf6" />
 4 ON 2 OFF
+<img width="1017" height="488" alt="image" src="https://github.com/user-attachments/assets/f31e16cb-8c3f-4b3d-97f1-7984f386a917" />
 <img width="1361" height="537" alt="image" src="https://github.com/user-attachments/assets/6fc4dba3-a04b-4acd-8853-ab4ce9d84a1d" />
 
 
