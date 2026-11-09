@@ -894,33 +894,33 @@ mise en place d'une solution de monitoring avec grafana et influx db pour avoir 
 <img width="1421" height="668" alt="image" src="https://github.com/user-attachments/assets/8b67f8e6-e914-45e7-a853-7e2a1dcc992c" />
 <img width="1455" height="862" alt="image" src="https://github.com/user-attachments/assets/498238d3-b178-4dbb-a653-054ab64f2aae" />
 <img width="1007" height="250" alt="image" src="https://github.com/user-attachments/assets/7fb97f7c-e2d2-49fe-9659-5e5df295d438" />
-**WITH t AS (
-  SELECT time, vpcs_name, status,
-         LAG(status) OVER (PARTITION BY vpcs_name ORDER BY time) AS prev
-  FROM vpcs_status
-  WHERE time >= now() - INTERVAL '7 days'
-),
-latest AS (
-  SELECT vpcs_name, MAX(time) AS last_time
-  FROM vpcs_status
-  WHERE time >= now() - INTERVAL '7 days'
-  GROUP BY vpcs_name
-),
-cur AS (
-  SELECT v.vpcs_name, v.status
-  FROM vpcs_status v
-  JOIN latest l ON v.vpcs_name = l.vpcs_name AND v.time = l.last_time
-),
-up_since AS (
-  SELECT vpcs_name, MAX(time) AS since
-  FROM t
-  WHERE status = 1 AND (prev IS NULL OR prev = 0)
-  GROUP BY vpcs_name
-)
-SELECT c.vpcs_name, c.status, u.since
-FROM cur c
-LEFT JOIN up_since u ON c.vpcs_name = u.vpcs_name
-ORDER BY c.vpcs_name**
+<br>WITH t AS (<br>
+  <br>SELECT time, vpcs_name, status,<br>
+         <br>LAG(status) OVER (PARTITION BY vpcs_name ORDER BY time) AS prev<br>
+  <br>FROM vpcs_status<br>
+  <br>WHERE time >= now() - INTERVAL '7 days'<br>
+<br>),<br>
+<br>latest AS (<br>
+  <br>SELECT vpcs_name, MAX(time) AS last_time<br>
+  <br>FROM vpcs_status<br>
+  <br>WHERE time >= now() - INTERVAL '7 days'<br>
+  <br>GROUP BY vpcs_name<br>
+<br>),<br>
+<br>cur AS (<br>
+  <br>SELECT v.vpcs_name, v.status<br>
+  <br>FROM vpcs_status v<br>
+  <br>JOIN latest l ON v.vpcs_name = l.vpcs_name AND v.time = l.last_time<br>
+<br>),<br>
+<br>up_since AS (<br>
+  <br>SELECT vpcs_name, MAX(time) AS since<br>
+  <br>FROM t<br>
+  <br>WHERE status = 1 AND (prev IS NULL OR prev = 0)<br>
+  <br>GROUP BY vpcs_name<br>
+<br>)<br>
+<br>SELECT c.vpcs_name, c.status, u.since<br>
+<br>FROM cur c<br>
+<br>LEFT JOIN up_since u ON c.vpcs_name = u.vpcs_name<br>
+<br>ORDER BY c.vpcs_name**<br>
 resultat:
 OFF
 <img width="1127" height="512" alt="image" src="https://github.com/user-attachments/assets/744fda77-075e-4608-a7cd-8214b2fb6750" />  
