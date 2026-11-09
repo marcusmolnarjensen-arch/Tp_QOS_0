@@ -882,3 +882,19 @@ R2#
 ```
 
 </details>
+
+
+module 10 : grafana
+OFF
+<img width="1127" height="512" alt="image" src="https://github.com/user-attachments/assets/744fda77-075e-4608-a7cd-8214b2fb6750" />  
+<img width="1350" height="525" alt="image" src="https://github.com/user-attachments/assets/359d8ff8-9c92-49f0-a525-187c267d5808" />
+ON
+<img width="1037" height="502" alt="image" src="https://github.com/user-attachments/assets/06f939fd-dfc7-475c-92cb-a95c1403bf7a" />
+<img width="1368" height="546" alt="image" src="https://github.com/user-attachments/assets/613cfac4-e114-4c41-b6d8-be9405bdfece" />
+3 OFF 3 ON
+<img width="1362" height="482" alt="image" src="https://github.com/user-attachments/assets/aadd5612-ec7e-4019-9d60-798a1a76ecf6" />
+4 ON 2 OFF
+<img width="1361" height="537" alt="image" src="https://github.com/user-attachments/assets/6fc4dba3-a04b-4acd-8853-ab4ce9d84a1d" />
+
+
+
