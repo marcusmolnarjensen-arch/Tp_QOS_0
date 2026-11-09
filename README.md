@@ -883,57 +883,156 @@ R2#
 
 </details>
 
+---
 
-module 10 : grafana
-mise en place d'une solution de monitoring avec grafana et influx db pour avoir un aperçu de mes vpcs (ON et OFF) j'ai aussi l'heure a laquelle ils se sont allumés qui s'affiche
-<br>Docker:<br>
-<img width="1587" height="895" alt="image" src="https://github.com/user-attachments/assets/5cf46e61-b6f7-49ea-8fd8-dc112197fe39" />
-<br>grafana et influxdb :<br>
-<img width="392" height="117" alt="image" src="https://github.com/user-attachments/assets/43874154-3647-4e79-9d1a-ff5ce33ae24f" />
-<img width="1437" height="512" alt="image" src="https://github.com/user-attachments/assets/f8c56465-0908-49f0-a810-a3213b2e87b7" />
-<img width="1421" height="668" alt="image" src="https://github.com/user-attachments/assets/8b67f8e6-e914-45e7-a853-7e2a1dcc992c" />
-<img width="1455" height="862" alt="image" src="https://github.com/user-attachments/assets/498238d3-b178-4dbb-a653-054ab64f2aae" />
-<img width="1007" height="250" alt="image" src="https://github.com/user-attachments/assets/7fb97f7c-e2d2-49fe-9659-5e5df295d438" />
-<br>WITH t AS (<br>
-  <br>SELECT time, vpcs_name, status,<br>
-         <br>LAG(status) OVER (PARTITION BY vpcs_name ORDER BY time) AS prev<br>
-  <br>FROM vpcs_status<br>
-  <br>WHERE time >= now() - INTERVAL '7 days'<br>
-<br>),<br>
-<br>latest AS (<br>
-  <br>SELECT vpcs_name, MAX(time) AS last_time<br>
-  <br>FROM vpcs_status<br>
-  <br>WHERE time >= now() - INTERVAL '7 days'<br>
-  <br>GROUP BY vpcs_name<br>
-<br>),<br>
-<br>cur AS (<br>
-  <br>SELECT v.vpcs_name, v.status<br>
-  <br>FROM vpcs_status v<br>
-  <br>JOIN latest l ON v.vpcs_name = l.vpcs_name AND v.time = l.last_time<br>
-<br>),<br>
-<br>up_since AS (<br>
-  <br>SELECT vpcs_name, MAX(time) AS since<br>
-  <br>FROM t<br>
-  <br>WHERE status = 1 AND (prev IS NULL OR prev = 0)<br>
-  <br>GROUP BY vpcs_name<br>
-<br>)<br>
-<br>SELECT c.vpcs_name, c.status, u.since<br>
-<br>FROM cur c<br>
-<br>LEFT JOIN up_since u ON c.vpcs_name = u.vpcs_name<br>
-<br>ORDER BY c.vpcs_name**<br>
-resultat:
-OFF
-<img width="1127" height="512" alt="image" src="https://github.com/user-attachments/assets/744fda77-075e-4608-a7cd-8214b2fb6750" />  
-<img width="1350" height="525" alt="image" src="https://github.com/user-attachments/assets/359d8ff8-9c92-49f0-a525-187c267d5808" />
-ON
-<img width="1037" height="502" alt="image" src="https://github.com/user-attachments/assets/06f939fd-dfc7-475c-92cb-a95c1403bf7a" />
-<img width="1368" height="546" alt="image" src="https://github.com/user-attachments/assets/613cfac4-e114-4c41-b6d8-be9405bdfece" />
-3 OFF 3 ON
-<img width="1058" height="502" alt="image" src="https://github.com/user-attachments/assets/d7c038c9-7ef0-492d-ab06-0f44dc77740a" />
-<img width="1362" height="482" alt="image" src="https://github.com/user-attachments/assets/aadd5612-ec7e-4019-9d60-798a1a76ecf6" />
-4 ON 2 OFF
-<img width="1017" height="488" alt="image" src="https://github.com/user-attachments/assets/f31e16cb-8c3f-4b3d-97f1-7984f386a917" />
-<img width="1361" height="537" alt="image" src="https://github.com/user-attachments/assets/6fc4dba3-a04b-4acd-8853-ab4ce9d84a1d" />
+## 11. Module 10 – Supervision des VPCS avec Grafana et InfluxDB
 
+### 11.1 Objectif
 
+Disposer d'un tableau de bord qui affiche, en temps réel, l'état **ON / OFF** de chaque VPCS de la topologie GNS3, ainsi que l'**heure à laquelle il s'est allumé**. L'heure reste identique tant que le nœud reste allumé et change quand il est redémarré.
 
+### 11.2 Architecture
+
+```mermaid
+flowchart LR
+    A["VPCS PC1 à PC6<br/>(GNS3)"] -->|"port console TCP<br/>5001 … 5011"| B["Script PowerShell<br/>check_vpcs.ps1"]
+    B -->|"Line Protocol<br/>HTTP :8181"| C[("InfluxDB 3 Core<br/>Docker")]
+    C -->|"SQL"| D["Grafana<br/>Docker :3000"]
+```
+
+| Composant | Rôle | Détail |
+|---|---|---|
+| Script `check_vpcs.ps1` | Collecte | Teste toutes les 5 s le port console de chaque VPCS : port ouvert = nœud démarré (`status=1`), port fermé = nœud arrêté (`status=0`) |
+| InfluxDB 3 Core | Stockage | Conteneur Docker, port `8181`, base `gns3`, mesure `vpcs_status` |
+| Grafana | Affichage | Conteneur Docker, port `3000`, source de données InfluxDB en SQL |
+
+### 11.3 Mise en place
+
+**Conteneurs Docker**
+
+<img width="800" alt="Conteneurs Docker" src="https://github.com/user-attachments/assets/5cf46e61-b6f7-49ea-8fd8-dc112197fe39" />
+
+**InfluxDB 3 Core** (lancé en root : sans cela, le volume Docker n'est pas accessible en écriture et le serveur s'arrête avec `Permission denied`) :
+
+```powershell
+docker run -d --name influxdb3 --user root -p 8181:8181 `
+  -v influx_data:/var/lib/influxdb3/data influxdb:3-core `
+  influxdb3 serve --node-id=node0 --object-store=file `
+  --data-dir=/var/lib/influxdb3/data --without-auth
+```
+
+Test d'écriture d'un point à la main (code `204` attendu) :
+
+```powershell
+curl.exe -i -X POST "http://localhost:8181/api/v3/write_lp?db=gns3" --data-raw "vpcs_status,vpcs_name=PC1 status=1"
+```
+
+**Source de données Grafana**
+
+| Paramètre | Valeur |
+|---|---|
+| Type | InfluxDB |
+| Query language | SQL |
+| URL | `http://host.docker.internal:8181` (Grafana étant dans un conteneur, `localhost` désignerait le conteneur lui-même) |
+| Database | `gns3` |
+| Token | vide (serveur lancé avec `--without-auth`) |
+| Insecure connection | activée (connexion en HTTP, sans TLS) |
+
+<details>
+<summary>Captures de la configuration de Grafana et d'InfluxDB</summary>
+
+<img width="500" alt="Configuration 1" src="https://github.com/user-attachments/assets/43874154-3647-4e79-9d1a-ff5ce33ae24f" />
+<img width="700" alt="Configuration 2" src="https://github.com/user-attachments/assets/f8c56465-0908-49f0-a810-a3213b2e87b7" />
+<img width="700" alt="Configuration 3" src="https://github.com/user-attachments/assets/8b67f8e6-e914-45e7-a853-7e2a1dcc992c" />
+<img width="700" alt="Configuration 4" src="https://github.com/user-attachments/assets/498238d3-b178-4dbb-a653-054ab64f2aae" />
+<img width="700" alt="Configuration 5" src="https://github.com/user-attachments/assets/7fb97f7c-e2d2-49fe-9659-5e5df295d438" />
+
+</details>
+
+**Script de collecte** (laissé en exécution dans une fenêtre PowerShell) :
+
+<details>
+<summary>check_vpcs.ps1</summary>
+
+```powershell
+$vpcs = @{ "PC1"=5001; "PC2"=5003; "PC3"=5005; "PC4"=5007; "PC5"=5009; "PC6"=5011 }
+
+function Test-Port($p) {
+  try {
+    $c = New-Object Net.Sockets.TcpClient
+    $ok = $c.ConnectAsync("127.0.0.1", $p).Wait(500)
+    $c.Close()
+    return [int]$ok
+  } catch { return 0 }
+}
+
+while ($true) {
+  foreach ($name in ($vpcs.Keys | Sort-Object)) {
+    $up = Test-Port $vpcs[$name]
+    curl.exe -s -o NUL -X POST "http://localhost:8181/api/v3/write_lp?db=gns3" --data-raw "vpcs_status,vpcs_name=$name status=$up"
+  }
+  Start-Sleep -Seconds 5
+}
+```
+
+</details>
+
+### 11.4 Requête et panneau Grafana
+
+Le panneau est de type **Table**, avec une actualisation automatique toutes les **5 secondes**. La requête retient, pour chaque VPCS, son dernier état et le dernier moment où il est passé de OFF à ON.
+
+<details>
+<summary>Requête SQL du panneau</summary>
+
+```sql
+WITH t AS (
+  SELECT time, vpcs_name, status,
+         LAG(status) OVER (PARTITION BY vpcs_name ORDER BY time) AS prev
+  FROM vpcs_status
+  WHERE time >= now() - INTERVAL '7 days'
+),
+latest AS (
+  SELECT vpcs_name, MAX(time) AS last_time
+  FROM vpcs_status
+  WHERE time >= now() - INTERVAL '7 days'
+  GROUP BY vpcs_name
+),
+cur AS (
+  SELECT v.vpcs_name, v.status
+  FROM vpcs_status v
+  JOIN latest l ON v.vpcs_name = l.vpcs_name AND v.time = l.last_time
+),
+up_since AS (
+  SELECT vpcs_name, MAX(time) AS since
+  FROM t
+  WHERE status = 1 AND (prev IS NULL OR prev = 0)
+  GROUP BY vpcs_name
+)
+SELECT c.vpcs_name, c.status, u.since
+FROM cur c
+LEFT JOIN up_since u ON c.vpcs_name = u.vpcs_name
+ORDER BY c.vpcs_name
+```
+
+</details>
+
+Mise en forme : colonne `status` avec fond coloré et *value mappings* (`1` → **ON** en vert, `0` → **OFF** en rouge), colonne `since` au format date et heure.
+
+### 11.5 Résultats
+
+Chaque ligne compare la topologie GNS3 (nœuds démarrés ou arrêtés) au panneau Grafana correspondant.
+
+| État des VPCS | Topologie GNS3 | Panneau Grafana |
+|---|---|---|
+| **Tous OFF** | <img width="380" alt="Topologie, tous OFF" src="https://github.com/user-attachments/assets/744fda77-075e-4608-a7cd-8214b2fb6750" /> | <img width="380" alt="Grafana, tous OFF" src="https://github.com/user-attachments/assets/359d8ff8-9c92-49f0-a525-187c267d5808" /> |
+| **Tous ON** | <img width="380" alt="Topologie, tous ON" src="https://github.com/user-attachments/assets/06f939fd-dfc7-475c-92cb-a95c1403bf7a" /> | <img width="380" alt="Grafana, tous ON" src="https://github.com/user-attachments/assets/613cfac4-e114-4c41-b6d8-be9405bdfece" /> |
+| **3 ON / 3 OFF** | <img width="380" alt="Topologie, 3 ON 3 OFF" src="https://github.com/user-attachments/assets/d7c038c9-7ef0-492d-ab06-0f44dc77740a" /> | <img width="380" alt="Grafana, 3 ON 3 OFF" src="https://github.com/user-attachments/assets/aadd5612-ec7e-4019-9d60-798a1a76ecf6" /> |
+| **4 ON / 2 OFF** | <img width="380" alt="Topologie, 4 ON 2 OFF" src="https://github.com/user-attachments/assets/f31e16cb-8c3f-4b3d-97f1-7984f386a917" /> | <img width="380" alt="Grafana, 4 ON 2 OFF" src="https://github.com/user-attachments/assets/6fc4dba3-a04b-4acd-8853-ab4ce9d84a1d" /> |
+
+Les heures de la colonne `since` changent bien à chaque redémarrage d'un nœud : le panneau suit l'état réel de la topologie.
+
+### 11.6 Limites
+
+- **L'état mesuré est celui du nœud dans GNS3** (port console ouvert ou non), pas sa joignabilité réseau. La liaison entre Windows et les VPCS via le nœud Cloud n'a pas pu être établie : les trames partaient de Windows mais la réponse n'était pas livrée à la carte réseau virtuelle.
+- **`since` indique le dernier allumage** du nœud, y compris lorsqu'il est actuellement éteint (ce n'est pas l'heure d'extinction).
+- **InfluxDB est lancé sans authentification** (`--without-auth`) : configuration réservée à un laboratoire local.
