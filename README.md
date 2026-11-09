@@ -886,9 +886,9 @@ R2#
 
 module 10 : grafana
 mise en place d'une solution de monitoring avec grafana et influx db pour avoir un aperçu de mes vpcs (ON et OFF) j'ai aussi l'heure a laquelle ils se sont allumés qui s'affiche
-Docker:
+<br>Docker:<br>
 <img width="1587" height="895" alt="image" src="https://github.com/user-attachments/assets/5cf46e61-b6f7-49ea-8fd8-dc112197fe39" />
-grafana et influxdb :
+<br>grafana et influxdb :<br>
 <img width="392" height="117" alt="image" src="https://github.com/user-attachments/assets/43874154-3647-4e79-9d1a-ff5ce33ae24f" />
 <img width="1437" height="512" alt="image" src="https://github.com/user-attachments/assets/f8c56465-0908-49f0-a810-a3213b2e87b7" />
 <img width="1421" height="668" alt="image" src="https://github.com/user-attachments/assets/8b67f8e6-e914-45e7-a853-7e2a1dcc992c" />
